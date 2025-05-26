@@ -10,6 +10,8 @@ public class Main {
         Integer port = null;
         String pass = null;
         String local = null;
+        String increments = null;
+        String callbackUrl = null; // 新增：回调地址
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -28,6 +30,12 @@ public class Main {
                 case "--local":
                     if (i + 1 < args.length) local = args[++i];
                     break;
+                case "--increments":
+                    if (i + 1 < args.length) increments = args[++i];
+                    break;
+                case "--callback": // 新增：回调地址参数
+                    if (i + 1 < args.length) callbackUrl = args[++i];
+                    break;
                 default:
                     System.out.println("Unknown argument: " + args[i]);
             }
@@ -38,14 +46,16 @@ public class Main {
         System.out.println("Account: " + account);
         System.out.println("Port: " + port);
         System.out.println("Local: " + local);
+        System.out.println("Increments: " + increments);
+        System.out.println("Callback URL: " + callbackUrl); // 输出回调地址
 
         // 创建 FTP 管理器并连接
         FtpManager ftpManager = new FtpManager(ip, port, account, pass);
         if (ftpManager.connect()) {
             System.out.println("FTP connection established.");
 
-            // 创建 AutoEngine 实例
-            AutoEngine autoEngine = new AutoEngine(ftpManager, local);
+            // 创建 AutoEngine 实例，传入回调地址
+            AutoEngine autoEngine = new AutoEngine(ftpManager, local, increments, callbackUrl);
 
             // 监听用户输入
             Scanner scanner = new Scanner(System.in);
