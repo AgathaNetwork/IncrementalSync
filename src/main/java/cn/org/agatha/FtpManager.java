@@ -112,39 +112,25 @@ public class FtpManager {
     }
 
     /**
-     * 遍历本地指定目录下的文件
-     *
-     * @param localDir 本地目录路径
-     * @return 文件列表，格式为 "文件路径,修改时间戳"
-     */
-    public List<String> getLocalFileInfo(String localDir) {
-        File directory = new File(localDir);
-        if (!directory.exists() || !directory.isDirectory()) {
-            System.out.println("Invalid directory: " + localDir);
-            return new ArrayList<>();
-        }
-
-        List<String> fileList = new ArrayList<>();
-        listFilesRecursively(directory, fileList);
-
-        return fileList;
-    }
-
-    /**
      * 递归列出目录下的所有文件
      *
      * @param directory 当前目录
-     * @param fileList  文件列表
+     * @param fileList  文件信息列表
+     * @param baseDir   基础目录路径
      */
-    private void listFilesRecursively(File directory, List<String> fileList) {
+    private void listFilesRecursively(File directory, List<FileInfo> fileList, String baseDir) {
         File[] files = directory.listFiles();
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
-                    listFilesRecursively(file, fileList);
+                    listFilesRecursively(file, fileList, baseDir);
                 } else {
-                    // 修改文件信息格式为 "文件路径,修改时间戳"
-                    fileList.add(file.getAbsolutePath() + "," + (file.lastModified() / 1000));
+                    // 构建 FileInfo 对象并添加到列表
+                    String relativePath = file.getAbsolutePath().replace(baseDir, "").replace("\\", "/");
+                    if (!relativePath.startsWith("/")) {
+                        relativePath = "/" + relativePath; // 确保路径以 / 开头
+                    }
+                    fileList.add(new FileInfo(relativePath, file.lastModified() / 1000));
                 }
             }
         }
@@ -153,15 +139,15 @@ public class FtpManager {
     /**
      * 遍历 FTP 服务器上的所有目录并获取文件信息
      *
-     * @return 文件列表，格式为 "文件路径,修改时间戳"
+     * @return 文件信息列表
      */
-    public List<String> fetchFileInfo() {
+    public List<FileInfo> fetchFileInfo() {
         if (!isConnected()) {
             System.out.println("Not connected to FTP server.");
             return new ArrayList<>();
         }
 
-        List<String> fileList = new ArrayList<>();
+        List<FileInfo> fileList = new ArrayList<>();
         try {
             List<String> directories = new ArrayList<>();
             directories.add("/");
@@ -174,14 +160,37 @@ public class FtpManager {
                     if (file.isDirectory()) {
                         directories.add(currentDir + file.getName() + "/");
                     } else {
-                        // 修改文件信息格式为 "文件路径,修改时间戳"
-                        fileList.add(currentDir + file.getName() + "," + (file.getTimestamp().getTimeInMillis() / 1000));
+                        // 构建 FileInfo 对象并添加到列表
+                        String filePath = currentDir + file.getName();
+                        if (!filePath.startsWith("/")) {
+                            filePath = "/" + filePath; // 确保路径以 / 开头
+                        }
+                        fileList.add(new FileInfo(filePath, file.getTimestamp().getTimeInMillis() / 1000));
                     }
                 }
             }
         } catch (Exception e) {
             System.out.println("Error fetching file information: " + e.getMessage());
         }
+
+        return fileList;
+    }
+
+    /**
+     * 遍历本地指定目录下的文件
+     *
+     * @param localDir 本地目录路径
+     * @return 文件信息列表
+     */
+    public List<FileInfo> getLocalFileInfo(String localDir) {
+        File directory = new File(localDir);
+        if (!directory.exists() || !directory.isDirectory()) {
+            System.out.println("Invalid directory: " + localDir);
+            return new ArrayList<>();
+        }
+
+        List<FileInfo> fileList = new ArrayList<>();
+        listFilesRecursively(directory, fileList, localDir);
 
         return fileList;
     }
@@ -204,13 +213,17 @@ public class FtpManager {
             if (!localFile.getParentFile().exists()) {
                 localFile.getParentFile().mkdirs();
             }
-            boolean success = ftpClient.retrieveFile(remotePath, new java.io.FileOutputStream(localFile));
-            if (!success) {
-                System.out.println("Failed to download file: " + remotePath);
-                return false;
+
+            // 使用 try-with-resources 确保 FileOutputStream 在下载完成后被正确关闭
+            try (java.io.FileOutputStream outputStream = new java.io.FileOutputStream(localFile)) {
+                boolean success = ftpClient.retrieveFile(remotePath, outputStream);
+                if (!success) {
+                    System.out.println("Failed to download file: " + remotePath);
+                    return false;
+                }
+                System.out.println("File downloaded successfully: " + remotePath);
+                return true;
             }
-            System.out.println("File downloaded successfully: " + remotePath);
-            return true;
         } catch (Exception e) {
             System.out.println("Error downloading file: " + e.getMessage());
             return false;

@@ -1,8 +1,6 @@
 package cn.org.agatha;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
 public class Main {
@@ -28,7 +26,7 @@ public class Main {
                     if (i + 1 < args.length) pass = args[++i];
                     break;
                 case "--local":
-                    if (i + 1 < args.length) local  = args[++i];
+                    if (i + 1 < args.length) local = args[++i];
                     break;
                 default:
                     System.out.println("Unknown argument: " + args[i]);
@@ -46,24 +44,31 @@ public class Main {
         if (ftpManager.connect()) {
             System.out.println("FTP connection established.");
 
+            // 创建 AutoEngine 实例
+            AutoEngine autoEngine = new AutoEngine(ftpManager, local);
+
             // 监听用户输入
             Scanner scanner = new Scanner(System.in);
             System.out.println("Type 'stop' to exit the program.");
             System.out.println("Type 'fetch' to retrieve file information.");
             System.out.println("Type 'local' to list local files.");
+            System.out.println("Type 'sync' to synchronize files.");
+            System.out.println("Type 'auto start <interval>' to start auto sync.");
+            System.out.println("Type 'auto stop' to stop auto sync.");
+
             while (true) {
                 String input = scanner.nextLine();
                 if ("stop".equalsIgnoreCase(input)) {
                     break;
                 } else if ("fetch".equalsIgnoreCase(input)) {
                     // 获取 FTP 文件信息
-                    List<String> ftpFiles = ftpManager.fetchFileInfo();
+                    List<FileInfo> ftpFiles = ftpManager.fetchFileInfo();
                     System.out.println("FTP File Information:");
                     ftpFiles.forEach(System.out::println);
                 } else if ("local".equalsIgnoreCase(input)) {
                     // 获取本地文件信息
                     if (local != null) {
-                        List<String> localFiles = ftpManager.getLocalFileInfo(local);
+                        List<FileInfo> localFiles = ftpManager.getLocalFileInfo(local);
                         System.out.println("Local File Information:");
                         localFiles.forEach(System.out::println);
                     } else {
@@ -72,41 +77,30 @@ public class Main {
                 } else if ("sync".equalsIgnoreCase(input)) {
                     // 同步本地和 FTP 文件
                     if (local != null) {
-                        List<String> localFiles = ftpManager.getLocalFileInfo(local);
-                        List<String> ftpFiles = ftpManager.fetchFileInfo();
-
-                        // 构建本地文件路径和时间戳的映射
-                        Map<String, Long> localFileMap = new HashMap<>();
-                        for (String fileInfo : localFiles) {
-                            String[] parts = fileInfo.split(",");
-                            String localPath = parts[0];
-                            // 去掉本地路径的前缀，使其与远程路径格式一致
-                            String normalizedLocalPath = localPath.replace(local, "").replace("\\", "/");
-                            if (normalizedLocalPath.startsWith("/")) {
-                                normalizedLocalPath = normalizedLocalPath.substring(1);
-                            }
-                            localFileMap.put(normalizedLocalPath, Long.parseLong(parts[1]));
-                        }
-
-                        // 遍历 FTP 文件，筛选需要同步的文件
-                        for (String fileInfo : ftpFiles) {
-                            String[] parts = fileInfo.split(",");
-                            String remotePath = parts[0];
-                            long remoteTimestamp = Long.parseLong(parts[1]);
-
-                            // 检查本地是否存在对应的文件
-                            Long localTimestamp = localFileMap.get(remotePath);
-
-                            // 如果本地文件不存在或修改时间较早，则下载
-                            if (localTimestamp == null || localTimestamp < remoteTimestamp) {
-                                System.out.println("Syncing file: " + remotePath);
-                                String localDownloadPath = local + remotePath;
-                                ftpManager.downloadFile(remotePath, localDownloadPath);
-                            }
-                        }
+                        autoEngine.syncFiles(); // 调用 AutoEngine 的 syncFiles 方法
                     } else {
                         System.out.println("Local directory not specified.");
                     }
+                } else if (input.toLowerCase().startsWith("auto start")) {
+                    // 解析同步间隔并启动自动同步
+                    String[] parts = input.split("\\s+");
+                    if (parts.length == 3) {
+                        try {
+                            long interval = Long.parseLong(parts[2]);
+                            autoEngine.startAutoSync(interval); // 调用 AutoEngine 的 startAutoSync 方法
+                            System.out.println("Auto sync started with interval: " + interval + " seconds");
+                        } catch (NumberFormatException e) {
+                            System.out.println("Invalid interval. Please provide a valid number.");
+                        }
+                    } else {
+                        System.out.println("Usage: auto start <interval>");
+                    }
+                } else if ("auto stop".equalsIgnoreCase(input)) {
+                    // 停止自动同步
+                    autoEngine.stopAutoSync(); // 调用 AutoEngine 的 stopAutoSync 方法
+                    System.out.println("Auto sync stopped.");
+                } else {
+                    System.out.println("Unknown command: " + input);
                 }
             }
 
