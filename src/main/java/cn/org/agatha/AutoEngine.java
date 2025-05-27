@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import java.util.zip.ZipOutputStream;
 import java.util.zip.ZipEntry;
 import java.io.File;
@@ -90,7 +91,9 @@ public class AutoEngine {
             for (String filePath : files) {
                 File fileToZip = new File(filePath);
                 FileInputStream fis = new FileInputStream(fileToZip);
-                ZipEntry zipEntry = new ZipEntry(fileToZip.getName());
+                // 使用相对路径作为 ZIP 条目名称，避免文件名冲突
+                String relativePath = filePath.replace(localDir, "").replace("\\", "/");
+                ZipEntry zipEntry = new ZipEntry(relativePath.startsWith("/") ? relativePath.substring(1) : relativePath);
                 zipOut.putNextEntry(zipEntry);
 
                 byte[] bytes = new byte[1024];
@@ -105,7 +108,10 @@ public class AutoEngine {
 
         // 执行 HTTP 回调
         long ts = System.currentTimeMillis() / 1000;
-        String commit = String.join("|", files);
+        // 修改 commit 参数的格式
+        String commit = files.stream()
+            .map(file -> new File(file).getName())
+            .collect(Collectors.joining("|"));
         String response = HttpCallback.sendPost(callbackUrl, ts, commit); // 使用传入的回调地址
         if (response != null) {
             System.out.println("HTTP Callback Response: " + response);

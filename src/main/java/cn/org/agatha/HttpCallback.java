@@ -39,13 +39,13 @@ public class HttpCallback {
             int responseCode = con.getResponseCode();
             System.out.println("Response Code: " + responseCode);
 
-            // 读取响应内容
-            try (java.util.Scanner scanner = new java.util.Scanner(con.getInputStream(), StandardCharsets.UTF_8.name())) {
-                String responseBody = scanner.useDelimiter("\\A").next();
-                return responseBody;
-            }
+
+
+            // 返回空字符串，表示不需要读取响应内容
+            return "";
         } catch (Exception e) {
             System.out.println("Error sending HTTP POST request: " + e.getMessage());
+            e.printStackTrace(); // 打印堆栈信息以便调试
             return null;
         }
     }

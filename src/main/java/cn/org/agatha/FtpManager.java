@@ -54,6 +54,8 @@ public class FtpManager {
             ftpClient.enterLocalPassiveMode();
             // 设置文件类型为二进制
             ftpClient.setFileType(FTPClient.BINARY_FILE_TYPE);
+            // 设置控制编码为 UTF-8，支持中文路径和文件名
+            ftpClient.setControlEncoding("UTF-8");
             System.out.println("Connected to FTP server successfully.");
             return true;
         } catch (Exception e) {
@@ -71,8 +73,11 @@ public class FtpManager {
     public boolean executeCommand(String command) {
         try {
             if (!isConnected()) {
-                System.out.println("Not connected to FTP server.");
-                return false;
+                System.out.println("Not connected to FTP server. Attempting to reconnect...");
+                if (!connect()) {
+                    System.out.println("Failed to reconnect to FTP server.");
+                    return false;
+                }
             }
             boolean success = ftpClient.sendSiteCommand(command);
             if (!success) {
@@ -108,7 +113,16 @@ public class FtpManager {
      * @return 是否已连接
      */
     public boolean isConnected() {
-        return ftpClient != null && ftpClient.isConnected();
+        if (ftpClient == null || !ftpClient.isConnected()) {
+            return false;
+        }
+        try {
+            // 尝试发送一个 NOOP 命令来验证连接是否仍然有效
+            return ftpClient.sendNoOp();
+        } catch (Exception e) {
+            System.out.println("Error verifying connection: " + e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -143,8 +157,11 @@ public class FtpManager {
      */
     public List<FileInfo> fetchFileInfo() {
         if (!isConnected()) {
-            System.out.println("Not connected to FTP server.");
-            return new ArrayList<>();
+            System.out.println("Not connected to FTP server. Attempting to reconnect...");
+            if (!connect()) {
+                System.out.println("Failed to reconnect to FTP server.");
+                return new ArrayList<>();
+            }
         }
 
         List<FileInfo> fileList = new ArrayList<>();
@@ -170,7 +187,17 @@ public class FtpManager {
                 }
             }
         } catch (Exception e) {
+            // 捕获异常后，检查连接状态并尝试重新连接
             System.out.println("Error fetching file information: " + e.getMessage());
+            if (!isConnected()) {
+                System.out.println("Connection lost. Attempting to reconnect...");
+                if (connect()) {
+                    System.out.println("Reconnected successfully. Retrying fetchFileInfo...");
+                    return fetchFileInfo(); // 递归调用以重新获取文件信息
+                } else {
+                    System.out.println("Failed to reconnect. Returning empty file list.");
+                }
+            }
         }
 
         return fileList;
@@ -204,8 +231,11 @@ public class FtpManager {
      */
     public boolean downloadFile(String remotePath, String localPath) {
         if (!isConnected()) {
-            System.out.println("Not connected to FTP server.");
-            return false;
+            System.out.println("Not connected to FTP server. Attempting to reconnect...");
+            if (!connect()) {
+                System.out.println("Failed to reconnect to FTP server.");
+                return false;
+            }
         }
 
         try {
@@ -213,17 +243,17 @@ public class FtpManager {
             if (!localFile.getParentFile().exists()) {
                 localFile.getParentFile().mkdirs();
             }
-
-            // 使用 try-with-resources 确保 FileOutputStream 在下载完成后被正确关闭
-            try (java.io.FileOutputStream outputStream = new java.io.FileOutputStream(localFile)) {
-                boolean success = ftpClient.retrieveFile(remotePath, outputStream);
-                if (!success) {
-                    System.out.println("Failed to download file: " + remotePath);
-                    return false;
-                }
-                System.out.println("File downloaded successfully: " + remotePath);
-                return true;
+            // 确保文件路径和文件名的编码正确传递
+            String encodedRemotePath = new String(remotePath.getBytes("UTF-8"), "ISO-8859-1");
+            // 修正路径分隔符，确保路径格式正确
+            String normalizedRemotePath = encodedRemotePath.replace("\\", "/");
+            boolean success = ftpClient.retrieveFile(normalizedRemotePath, new java.io.FileOutputStream(localFile));
+            if (!success) {
+                System.out.println("Failed to download file: " + remotePath);
+                return false;
             }
+            System.out.println("File downloaded successfully: " + remotePath);
+            return true;
         } catch (Exception e) {
             System.out.println("Error downloading file: " + e.getMessage());
             return false;

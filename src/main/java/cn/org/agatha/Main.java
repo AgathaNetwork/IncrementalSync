@@ -1,5 +1,6 @@
 package cn.org.agatha;
 
+import java.net.URL;
 import java.util.List;
 import java.util.Scanner;
 
@@ -34,7 +35,15 @@ public class Main {
                     if (i + 1 < args.length) increments = args[++i];
                     break;
                 case "--callback": // 新增：回调地址参数
-                    if (i + 1 < args.length) callbackUrl = args[++i];
+                    if (i + 1 < args.length) {
+                        String url = args[++i];
+                        try {
+                            new URL(url); // 校验 URL 格式
+                            callbackUrl = url;
+                        } catch (Exception e) {
+                            System.out.println("Invalid callback URL: " + url);
+                        }
+                    }
                     break;
                 default:
                     System.out.println("Unknown argument: " + args[i]);
